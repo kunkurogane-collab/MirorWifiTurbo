@@ -1,0 +1,43 @@
+name: Build Android APK from ZIP
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repositori
+        uses: actions/checkout@v4
+
+      - name: Ekstrak File ZIP Proyek
+        run: |
+          unzip -o MirrorWiFiTurbo-GitHub.zip -d project_src
+          cd project_src
+          ls -la
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate Gradle Wrapper & Build APK
+        working-directory: ./project_src
+        run: |
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Hasil APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MirrorWiFi-Turbo-APK
+          path: project_src/app/build/outputs/apk/debug/app-debug.apk
+          
