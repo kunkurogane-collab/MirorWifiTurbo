@@ -1,4 +1,4 @@
-name: Build Android APK from ZIP
+name: Build APK dari ZIP
 
 on:
   push:
@@ -10,16 +10,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repositori
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Ekstrak File ZIP Proyek
+      - name: Ekstrak ZIP proyek
         run: |
-          mkdir -p project_src
-          unzip -o MirrorWiFiTurbo-GitHub.zip -d project_src
-          # Pindahkan isi jika file ZIP terbungkus di dalam sub-folder
-          SUBDIR=$(find project_src -name "settings.gradle.kts" -printf "%h\n" | head -n 1)
-          echo "PROJECT_DIR=$SUBDIR" >> $GITHUB_ENV
+          ZIP=$(ls -1 *.zip 2>/dev/null | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "::error::Tidak ada file .zip di root repo. Upload zip proyek ke root repo."
+            exit 1
+          fi
+          echo "Memakai: $ZIP"
+          rm -rf _proj && mkdir _proj
+          unzip -q "$ZIP" -d _proj
+          SETTINGS=$(find _proj -name "settings.gradle.kts" -not -path "*/node_modules/*" | head -n 1)
+          if [ -z "$SETTINGS" ]; then
+            echo "::error::settings.gradle.kts tidak ditemukan di dalam zip."
+            exit 1
+          fi
+          PROJ_DIR=$(dirname "$SETTINGS")
+          echo "PROJ_DIR=$PROJ_DIR" >> "$GITHUB_ENV"
+          echo "Folder proyek: $PROJ_DIR"
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -27,23 +38,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Accept Android SDK Licenses
-        run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Build APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          gradle assembleDebug
+      - name: Build APK debug
+        working-directory: ${{ env.PROJ_DIR }}
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Upload Hasil APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: MirrorWiFi-Turbo-APK
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
-          
+          path: ${{ env.PROJ_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
